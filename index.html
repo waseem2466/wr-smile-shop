@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>WR Smile and Supplies</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"  rel="stylesheet"/>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"  rel="stylesheet"/>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="d-flex">
+  <!-- Sidebar -->
+  <div class="bg-dark text-white p-3 vh-100" style="width: 250px;">
+    <h4><i class="fas fa-store me-2"></i> WR Smile</h4>
+    <p class="small text-muted mb-4">Kandy Road, Mollipothana</p>
+    <ul class="nav flex-column mt-4">
+      <li class="nav-item"><a href="#" class="nav-link text-white active">Dashboard</a></li>
+      <li class="nav-item"><a href="#stock" class="nav-link text-white">Stock</a></li>
+      <li class="nav-item"><a href="#billing" class="nav-link text-white">Billing</a></li>
+      <li class="nav-item"><a href="#reports" class="nav-link text-white">Reports</a></li>
+    </ul>
+  </div>
+
+  <!-- Main Content -->
+  <div class="p-4 w-100">
+    <div class="d-flex justify-content-between align-items-center">
+      <h2>WR Smile and Supplies</h2>
+      <div class="text-end">
+        <p class="mb-0"><strong>Address:</strong> 411/7, Kandy Road, Mollipothana, Kanthala</p>
+        <p class="mb-0"><strong>Contact:</strong> 076-495-0844</p>
+      </div>
+    </div>
+
+    <!-- Dashboard Cards -->
+    <div class="row mt-4">
+      <div class="col-md-6 mb-3">
+        <div class="card">
+          <div class="card-body">
+            <h5 class="card-title">Current Stock</h5>
+            <p id="stock-count" class="card-text display-6">Loading...</p>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-6 mb-3">
+        <div class="card">
+          <div class="card-body">
+            <h5 class="card-title">Today's Sales</h5>
+            <p id="sales-today" class="card-text display-6">₹0</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Stock Section -->
+    <section id="stock" class="mt-5">
+      <h3>Manage Stock</h3>
+      <button class="btn btn-primary mb-3" data-bs-toggle="modal" data-bs-target="#addProductModal">
+        <i class="fas fa-plus-circle me-1"></i> Add New Product
+      </button>
+      <table class="table table-bordered table-striped">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Product Name</th>
+            <th>Price</th>
+            <th>Stock</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="stock-table-body">
+          <tr>
+            <td>1</td>
+            <td>Rice (5kg)</td>
+            <td>₹150</td>
+            <td>20</td>
+            <td>
+              <button class="btn btn-sm btn-warning">Edit</button>
+              <button class="btn btn-sm btn-danger">Delete</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- Billing Section -->
+    <section id="billing" class="mt-5">
+      <h3>Create Bill</h3>
+      <div class="row">
+        <div class="col-md-6">
+          <input type="text" id="product-search" class="form-control mb-3" placeholder="Search product by name or barcode..." />
+          <div id="cart" class="border rounded p-3 mb-3" style="min-height: 100px;">
+            <strong>Cart:</strong>
+            <ul id="cart-items"></ul>
+          </div>
+          <h5>Total: ₹<span id="total-amount">0</span></h5>
+          <button class="btn btn-success" onclick="alert('Bill generated successfully!')">Print Receipt</button>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<!-- Add Product Modal -->
+<div class="modal fade" id="addProductModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form onsubmit="addProduct(event)">
+        <div class="modal-header">
+          <h5 class="modal-title">Add New Product</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Product Name</label>
+            <input type="text" class="form-control" id="productName" required />
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Price (₹)</label>
+            <input type="number" class="form-control" id="productPrice" required />
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Stock Quantity</label>
+            <input type="number" class="form-control" id="productStock" required />
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+          <button type="submit" class="btn btn-primary">Add Product</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script> 
+<script src="script.js"></script>
+</body>
+</html>

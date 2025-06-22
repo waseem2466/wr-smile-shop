@@ -1,0 +1,9 @@
+body {
+  font-family: 'Segoe UI', sans-serif;
+}
+.card-text.display-6 {
+  font-size: 2rem;
+}
+#cart {
+  background-color: #f9f9f9;
+}
