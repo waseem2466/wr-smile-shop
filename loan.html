@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>WR Smile Loan Management</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <style>
+    body { background: #f8f9fa; font-family: 'Segoe UI', sans-serif; }
+    .container { max-width: 900px; margin-top: 20px; }
+    .loan-card { background: white; padding: 15px; margin-bottom: 20px; border-radius: 8px; box-shadow: 0 3px 10px rgba(0,0,0,0.1);}
+    .btn-group { margin-top: 10px; }
+  </style>
+</head>
+<body>
+
+<nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+  <div class="container">
+    <a class="navbar-brand" href="#">WR Smile</a>
+    <div class="collapse navbar-collapse">
+      <ul class="navbar-nav me-auto">
+        <li class="nav-item"><a class="nav-link" href="billing.html">Billing</a></li>
+        <li class="nav-item"><a class="nav-link active" href="loans.html">Loan Management</a></li>
+      </ul>
+    </div>
+  </div>
+</nav>
+
+<div class="container">
+  <h2 class="mb-4 text-center">💰 Loan Management</h2>
+
+  <div class="mb-3">
+    <label for="loan-customer-select" class="form-label">Select Customer</label>
+    <select id="loan-customer-select" class="form-select">
+      <option value="">-- Select Customer --</option>
+    </select>
+  </div>
+
+  <div id="loan-list"></div>
+
+  <!-- Payment Modal -->
+  <div class="modal fade" id="paymentModal" tabindex="-1">
+    <div class="modal-dialog">
+      <form id="payment-form" class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Add Payment</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p id="payment-loan-info"></p>
+          <div class="mb-3">
+            <label for="payment-amount" class="form-label">Amount to Pay (Rs.)</label>
+            <input type="number" min="1" step="0.01" id="payment-amount" class="form-control" required />
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+          <button type="submit" class="btn btn-primary">Save Payment</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<script>
+  const { jsPDF } = window.jspdf;
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyACehOi7n-dbdN00D4tJr2kD_-AVR6S-Vo",
+    authDomain: "wr-smile-shop.firebaseapp.com",
+    projectId: "wr-smile-shop",
+    storageBucket: "wr-smile-shop.appspot.com",
+    messagingSenderId: "299864260187",
+    appId: "1:299864260187:web:fa6af65ef95674aff1097e"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.database();
+
+  const customersRef = db.ref("customers");
+  const loansRef = db.ref("loans");
+  const paymentsRef = db.ref("payments");
+
+  const loanCustomerSelect = document.getElementById("loan-customer-select");
+  const loanListDiv = document.getElementById("loan-list");
+  let selectedCustomerId = null;
+  let selectedLoanId = null;
+  let selectedLoanData = null;
+  let customerDataMap = {};
+
+  function loadCustomers() {
+    customersRef.once("value").then(snapshot => {
+      loanCustomerSelect.innerHTML = `<option value="">-- Select Customer --</option>`;
+      customerDataMap = {};
+      snapshot.forEach(child => {
+        const cust = child.val();
+        customerDataMap[child.key] = cust;
+        const option = document.createElement("option");
+        option.value = child.key;
+        option.textContent = `${cust.name} (${cust.phone})`;
+        loanCustomerSelect.appendChild(option);
+      });
+    });
+  }
+  loadCustomers();
+
+  loanCustomerSelect.addEventListener("change", e => {
+    selectedCustomerId = e.target.value;
+    loadLoansForCustomer(selectedCustomerId);
+  });
+
+  function loadLoansForCustomer(customerId) {
+    if (!customerId) {
+      loanListDiv.innerHTML = "<p>Please select a customer to see loans.</p>";
+      return;
+    }
+    loansRef.orderByChild("customerId").equalTo(customerId).once("value").then(snapshot => {
+      loanListDiv.innerHTML = "";
+      if (!snapshot.exists()) {
+        loanListDiv.innerHTML = "<p>No loans found for this customer.</p>";
+        return;
+      }
+      snapshot.forEach(child => {
+        const loan = child.val();
+        const loanId = child.key;
+
+        // Fetch payments for this loan
+        paymentsRef.orderByChild("loanId").equalTo(loanId).once("value").then(paySnapshot => {
+          let payments = [];
+          paySnapshot.forEach(pChild => {
+            payments.push(pChild.val());
+          });
+
+          const div = document.createElement("div");
+          div.className = "loan-card";
+
+          let productsList = "";
+          loan.products.forEach(p => {
+            productsList += `<li>${p.name} x${p.qty} @ Rs.${p.price.toFixed(2)} each</li>`;
+          });
+
+          let paymentsList = payments.length ? "<ul>" + payments.map(pay => `<li>Rs. ${pay.amount.toFixed(2)} on ${new Date(pay.paymentDate).toLocaleDateString()}</li>`).join('') + "</ul>" : "<p>No payments yet.</p>";
+
+          div.innerHTML = `
+            <h5>Loan ID: ${loanId}</h5>
+            <ul>${productsList}</ul>
+            <p><strong>Total Amount:</strong> Rs. ${loan.totalAmount.toFixed(2)}</p>
+            <p><strong>Paid Amount:</strong> Rs. ${loan.paidAmount.toFixed(2)}</p>
+            <p><strong>Balance:</strong> Rs. ${loan.balance.toFixed(2)}</p>
+            <h6>Payments:</h6>
+            ${paymentsList}
+            <div class="btn-group">
+              <button class="btn btn-primary btn-sm add-payment-btn" data-loan-id="${loanId}">Add Payment</button>
+              <button class="btn btn-secondary btn-sm ms-2" data-loan-id="${loanId}">Export PDF</button>
+              <button class="btn btn-success btn-sm ms-2" data-loan-id="${loanId}">Send WhatsApp</button>
+            </div>
+          `;
+          loanListDiv.appendChild(div);
+
+          // Buttons events:
+          div.querySelector(".add-payment-btn").addEventListener("click", () => {
+            selectedLoanId = loanId;
+            selectedLoanData = loan;
+            document.getElementById("payment-loan-info").textContent = `Loan ID: ${loanId} | Balance: Rs. ${loan.balance.toFixed(2)}`;
+            const paymentModal = new bootstrap.Modal(document.getElementById("paymentModal"));
+            paymentModal.show();
+          });
+
+          div.querySelector(".btn-secondary").addEventListener("click", () => {
+            exportPdf(loanId, loan, payments);
+          });
+
+          div.querySelector(".btn-success").addEventListener("click", () => {
+            sendWhatsAppMessage(loanId, loan, payments);
+          });
+        });
+      });
+    });
+  }
+
+  // Payment form submit
+  document.getElementById("payment-form").addEventListener("submit", e => {
+    e.preventDefault();
+    const amountInput = document.getElementById("payment-amount");
+    const amount = parseFloat(amountInput.value);
+    if (isNaN(amount) || amount <= 0) {
+      alert("Enter a valid payment amount.");
+      return;
+    }
+    if (amount > selectedLoanData.balance) {
+      alert("Payment cannot be greater than the balance.");
+      return;
+    }
+
+    paymentsRef.push({
+      loanId: selectedLoanId,
+      amount,
+      paymentDate: new Date().toISOString()
+    }).then(() => {
+      // Update loan paidAmount and balance
+      const newPaid = selectedLoanData.paidAmount + amount;
+      const newBalance = selectedLoanData.balance - amount;
+
+      loansRef.child(selectedLoanId).update({
+        paidAmount: newPaid,
+        balance: newBalance
+      }).then(() => {
+        alert("Payment recorded!");
+        amountInput.value = "";
+        const paymentModalEl = document.getElementById("paymentModal");
+        const paymentModal = bootstrap.Modal.getInstance(paymentModalEl);
+        paymentModal.hide();
+        loadLoansForCustomer(selectedCustomerId);
+      });
+    });
+  });
+
+  // PDF export function
+  function exportPdf(loanId, loan, payments) {
+    const doc = new jsPDF();
+    doc.setFontSize(16);
+    doc.text("WR Smile & Supplies - Loan Receipt", 20, 20);
+    doc.setFontSize(12);
+    const cust = customerDataMap[loan.customerId] || {name:"Unknown", phone:"Unknown"};
+    doc.text(`Customer: ${cust.name}`, 20, 30);
+    doc.text(`Phone: ${cust.phone}`, 20, 38);
+    doc.text(`Loan ID: ${loanId}`, 20, 46);
+    doc.text(`Date: ${new Date(loan.loanDate).toLocaleDateString()}`, 20, 54);
+
+    doc.text("Products:", 20, 64);
+    let y = 72;
+    loan.products.forEach(p => {
+      doc.text(`- ${p.name} x${p.qty} @ Rs.${p.price.toFixed(2)}`, 25, y);
+      y += 8;
+    });
+
+    doc.text(`Total Amount: Rs. ${loan.totalAmount.toFixed(2)}`, 20, y+8);
+    doc.text(`Discount: Rs. ${loan.discount ? loan.discount.toFixed(2) : "0.00"}`, 20, y+16);
+    doc.text(`Paid Amount: Rs. ${loan.paidAmount.toFixed(2)}`, 20, y+24);
+    doc.text(`Balance: Rs. ${loan.balance.toFixed(2)}`, 20, y+32);
+
+    doc.text("Payments:", 20, y+44);
+    let py = y+52;
+    if(payments.length === 0) {
+      doc.text("No payments yet.", 25, py);
+    } else {
+      payments.forEach(pay => {
+        doc.text(`- Rs. ${pay.amount.toFixed(2)} on ${new Date(pay.paymentDate).toLocaleDateString()}`, 25, py);
+        py += 8;
+      });
+    }
+    doc.save(`LoanReceipt_${loanId}.pdf`);
+  }
+
+  // WhatsApp message function
+  function sendWhatsAppMessage(loanId, loan, payments) {
+    const cust = customerDataMap[loan.customerId];
+    if (!cust || !cust.phone) {
+      alert("Customer phone number not found.");
+      return;
+    }
+    let msg = `*WR Smile Loan Details*\nLoan ID: ${loanId}\nCustomer: ${cust.name}\n\nProducts:\n`;
+    loan.products.forEach(p => {
+      msg += `- ${p.name} x${p.qty} @ Rs.${p.price.toFixed(2)}\n`;
+    });
+    msg += `\nTotal Amount: Rs. ${loan.totalAmount.toFixed(2)}`;
+    msg += `\nPaid Amount: Rs. ${loan.paidAmount.toFixed(2)}`;
+    msg += `\nBalance: Rs. ${loan.balance.toFixed(2)}\n\nPayments:\n`;
+
+    if (payments.length === 0) {
+      msg += "No payments made yet.";
+    } else {
+      payments.forEach(pay => {
+        msg += `- Rs. ${pay.amount.toFixed(2)} on ${new Date(pay.paymentDate).toLocaleDateString()}\n`;
+      });
+    }
+    const encodedMsg = encodeURIComponent(msg);
+    const phoneNumber = cust.phone.startsWith('94') ? cust.phone : '94' + cust.phone.replace(/^0+/, '');
+    const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodedMsg}`;
+    window.open(whatsappUrl, '_blank');
+  }
+</script>
+</body>
+</html>

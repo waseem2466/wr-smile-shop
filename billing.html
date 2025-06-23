@@ -2,64 +2,387 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Billing - WR Smile</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"  rel="stylesheet"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>WR Smile Billing</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+  <style>
+    body { background: #f8f9fa; font-family: 'Segoe UI', sans-serif; }
+    .container { max-width: 900px; margin-top: 40px; }
+    #search-results, #customer-search-results {
+      position: absolute; 
+      z-index: 1050; 
+      max-height: 200px; 
+      overflow-y: auto; 
+      width: 100%;
+      background: white; 
+      border: 1px solid #ced4da; 
+      border-radius: 0 0 5px 5px;
+    }
+    .list-group-item { cursor: pointer; }
+    .cart-box { border: 1px solid #dee2e6; border-radius: 5px; padding: 15px; margin-top: 20px; background: #fff; }
+    .cart-item { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .cart-item span { flex: 1; }
+    .cart-item button { margin-left: 5px; }
+    @media print { 
+      body * { visibility: hidden; } 
+      .print-area, .print-area * { visibility: visible; } 
+      .print-area { position: absolute; left: 0; top: 0; width: 100%; } 
+    }
+  </style>
 </head>
 <body>
+<div class="container position-relative">
+  <h2 class="mb-4 text-center">🧾 WR Smile - Create Bill</h2>
+  
+  <div class="mb-3">
+    <label for="invoice-number" class="form-label">Invoice Number</label>
+    <input type="text" id="invoice-number" class="form-control" readonly />
+  </div>
 
-<!-- Loader -->
-<div id="page-loader" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: #fff; z-index: 9999; display: flex; align-items: center; justify-content: center;">
-  <div class="spinner-border text-primary" role="status"></div>
-</div>
+  <div class="mb-3 position-relative">
+    <label for="customer-search" class="form-label">Search Customer</label>
+    <input type="text" id="customer-search" class="form-control" placeholder="Type customer name or phone..." autocomplete="off" />
+    <div id="customer-search-results" class="list-group"></div>
+  </div>
 
-<!-- Header -->
-<div class="container mt-4 text-center">
-  <img src="assets/logo.png" alt="Logo" width="120" class="mb-3" />
-  <h2>Create Bill</h2>
-</div>
+  <div class="mb-3">
+    <label for="customer-name" class="form-label">Customer Name</label>
+    <input type="text" id="customer-name" class="form-control" placeholder="Customer name" />
+  </div>
 
-<input type="text" id="product-search" class="form-control container mb-3" placeholder="Search product by name..." />
-<div id="cart" class="border rounded p-3 container mb-3" style="min-height: 100px;">
-  <strong>Cart:</strong>
-  <ul id="cart-items"></ul>
-</div>
-<h5 class="container">Total: Rs.<span id="total-amount">0</span></h5>
-<button class="btn btn-success w-100 container" onclick="generateReceipt()">Print Receipt</button>
-<button class="btn btn-success w-100 container mt-2" onclick="sendReceiptViaWhatsApp()">📲 Send via WhatsApp</button>
+  <div class="mb-3">
+    <label for="customer-phone" class="form-label">Customer WhatsApp Number</label>
+    <input type="tel" id="customer-phone" class="form-control" placeholder="Ex: 94771234567" />
+  </div>
 
-<!-- Receipt Modal -->
-<div class="modal fade" id="receiptModal" tabindex="-1">
-  <div class="modal-dialog modal-lg">
-    <div class="modal-content">
-      <div class="modal-body" id="receipt-content">
-        <div class="text-center mb-3">
-          <img src="assets/logo.png" alt="Logo" width="100" class="mb-2" />
-          <h4>WR Smile and Supplies</h4>
-          <p>411/7, Kandy Road, Mollipothana, Kanthala</p>
-          <p>Tel: 076-495-0844</p>
-          <hr>
-        </div>
-        <div id="receipt-items"></div>
-        <hr>
-        <div class="d-flex justify-content-between">
-          <strong>Date:</strong>
-          <span id="receipt-date"></span>
-        </div>
-        <div class="d-flex justify-content-between">
-          <strong>Total:</strong>
-          <span id="receipt-total">Rs. 0</span>
-        </div>
+  <div class="mb-3 position-relative">
+    <label for="product-search" class="form-label">Search Product</label>
+    <input type="text" id="product-search" class="form-control" placeholder="Type product name..." autocomplete="off" />
+    <div id="search-results" class="list-group"></div>
+  </div>
+
+  <div class="mb-3">
+    <h5>➕ Add Product Manually</h5>
+    <div class="row g-2">
+      <div class="col-md-5">
+        <input type="text" id="manual-product-name" class="form-control" placeholder="Product Name" />
       </div>
-      <div class="modal-footer">
-        <button class="btn btn-primary" onclick="window.print()">Print</button>
+      <div class="col-md-3">
+        <input type="number" id="manual-product-price" class="form-control" placeholder="Price (Rs.)" step="0.01" min="0" />
+      </div>
+      <div class="col-md-2">
+        <input type="number" id="manual-product-qty" class="form-control" placeholder="Qty" step="1" min="1" />
+      </div>
+      <div class="col-md-2">
+        <button class="btn btn-secondary w-100" type="button" id="manual-add-btn">Add to Cart</button>
       </div>
     </div>
   </div>
+
+  <div class="mb-3">
+    <label for="discount" class="form-label">Discount (Rs.)</label>
+    <input type="number" id="discount" class="form-control" value="0" min="0" step="0.01" />
+  </div>
+
+  <div class="cart-box">
+    <h5>Cart:</h5>
+    <div id="cart-items"></div>
+    <h5 class="mt-3">Total: Rs. <span id="total-amount">0.00</span></h5>
+    <button class="btn btn-success mt-3" id="send-whatsapp-btn">📲 Send Bill via WhatsApp</button>
+    <button class="btn btn-outline-primary mt-3 ms-2" id="print-receipt-btn">🖨️ Print Receipt</button>
+    <button class="btn btn-outline-danger mt-3 ms-2" id="export-pdf-btn">⬇️ Export PDF</button>
+  </div>
+
+  <!-- Hidden print area -->
+  <div class="print-area d-none">
+    <h4 class="text-center">WR Smile & Supplies</h4>
+    <p class="text-center">411/7, Kandy Road, Mollipothana, Tel: 076-495-0844</p>
+    <p class="text-center">Invoice No: <span id="print-invoice"></span></p>
+    <hr>
+    <p><strong>Customer:</strong> <span id="print-customer-name"></span></p>
+    <p><strong>Phone:</strong> <span id="print-customer-phone"></span></p>
+    <div id="print-items"></div>
+    <hr>
+    <p><strong>Discount:</strong> Rs. <span id="print-discount"></span></p>
+    <p><strong>Total:</strong> Rs. <span id="print-total"></span></p>
+    <p class="text-end">Printed on: <span id="print-date"></span></p>
+  </div>
 </div>
 
-<!-- Scripts -->
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script> 
-<script src="script.js"></script>
+<script>
+  // Firebase config
+  const firebaseConfig = {
+    apiKey: "AIzaSyACehOi7n-dbdN00D4tJr2kD_-AVR6S-Vo",
+    authDomain: "wr-smile-shop.firebaseapp.com",
+    databaseURL: "https://wr-smile-shop-default-rtdb.firebaseio.com/",
+    projectId: "wr-smile-shop",
+    storageBucket: "wr-smile-shop.appspot.com",
+    messagingSenderId: "299864260187",
+    appId: "1:299864260187:web:fa6af65ef95674aff1097e"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.database();
+
+  // Globals
+  let cart = [];
+  let invoiceNumber = 'INV-' + Date.now();
+
+  // Elements
+  const invoiceInput = document.getElementById('invoice-number');
+  const productSearch = document.getElementById('product-search');
+  const searchResults = document.getElementById('search-results');
+  const cartItems = document.getElementById('cart-items');
+  const totalAmountSpan = document.getElementById('total-amount');
+  const discountInput = document.getElementById('discount');
+
+  const customerSearch = document.getElementById('customer-search');
+  const customerSearchResults = document.getElementById('customer-search-results');
+  const customerNameInput = document.getElementById('customer-name');
+  const customerPhoneInput = document.getElementById('customer-phone');
+
+  const manualNameInput = document.getElementById('manual-product-name');
+  const manualPriceInput = document.getElementById('manual-product-price');
+  const manualQtyInput = document.getElementById('manual-product-qty');
+  const manualAddBtn = document.getElementById('manual-add-btn');
+
+  const sendWhatsappBtn = document.getElementById('send-whatsapp-btn');
+  const printReceiptBtn = document.getElementById('print-receipt-btn');
+  const exportPdfBtn = document.getElementById('export-pdf-btn');
+
+  // Initialize
+  invoiceInput.value = invoiceNumber;
+
+  // Utility Functions
+  function calculateTotal() {
+    let total = 0;
+    cart.forEach(item => {
+      total += item.price * item.qty;
+    });
+    const discount = parseFloat(discountInput.value) || 0;
+    total -= discount;
+    if (total < 0) total = 0;
+    totalAmountSpan.textContent = total.toFixed(2);
+  }
+
+  function renderCart() {
+    cartItems.innerHTML = '';
+    cart.forEach((item, index) => {
+      const div = document.createElement('div');
+      div.className = 'cart-item';
+      div.innerHTML = `
+        <span>${item.name} (Rs. ${item.price.toFixed(2)}) x ${item.qty}</span>
+        <button class="btn btn-sm btn-danger" data-index="${index}">Delete</button>
+      `;
+      cartItems.appendChild(div);
+    });
+    calculateTotal();
+  }
+
+  function addToCart(product, qty = 1) {
+    const existingIndex = cart.findIndex(p => p.id === product.id);
+    if (existingIndex !== -1) {
+      cart[existingIndex].qty += qty;
+    } else {
+      cart.push({...product, qty});
+    }
+    renderCart();
+  }
+
+  function resetSearchResults() {
+    searchResults.innerHTML = '';
+  }
+
+  function resetCustomerSearchResults() {
+    customerSearchResults.innerHTML = '';
+  }
+
+  // Product Search
+  productSearch.addEventListener('input', () => {
+    const query = productSearch.value.trim().toLowerCase();
+    if (!query) {
+      resetSearchResults();
+      return;
+    }
+    db.ref('products').orderByChild('name').startAt(query).endAt(query+"\uf8ff").limitToFirst(10).once('value', snapshot => {
+      resetSearchResults();
+      if (snapshot.exists()) {
+        snapshot.forEach(child => {
+          const p = child.val();
+          const li = document.createElement('button');
+          li.type = 'button';
+          li.className = 'list-group-item list-group-item-action';
+          li.textContent = `${p.name} (Rs. ${p.price.toFixed(2)}) Stock: ${p.stock}`;
+          li.onclick = () => {
+            addToCart({ id: child.key, name: p.name, price: p.price }, 1);
+            productSearch.value = '';
+            resetSearchResults();
+          };
+          searchResults.appendChild(li);
+        });
+      }
+    });
+  });
+
+  // Customer Search
+  customerSearch.addEventListener('input', () => {
+    const query = customerSearch.value.trim().toLowerCase();
+    if (!query) {
+      resetCustomerSearchResults();
+      return;
+    }
+    db.ref('customers').orderByChild('name').startAt(query).endAt(query+"\uf8ff").limitToFirst(10).once('value', snapshot => {
+      resetCustomerSearchResults();
+      if (snapshot.exists()) {
+        snapshot.forEach(child => {
+          const c = child.val();
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'list-group-item list-group-item-action';
+          btn.textContent = `${c.name} (${c.phone})`;
+          btn.onclick = () => {
+            customerNameInput.value = c.name;
+            customerPhoneInput.value = c.phone;
+            customerSearch.value = '';
+            resetCustomerSearchResults();
+          };
+          customerSearchResults.appendChild(btn);
+        });
+      }
+    });
+  });
+
+  // Manual add product button
+  manualAddBtn.addEventListener('click', () => {
+    const name = manualNameInput.value.trim();
+    const price = parseFloat(manualPriceInput.value);
+    const qty = parseInt(manualQtyInput.value);
+    if (!name || isNaN(price) || isNaN(qty) || qty <= 0 || price < 0) {
+      alert('Please enter valid product name, price, and quantity.');
+      return;
+    }
+    addToCart({ id: 'manual-'+Date.now(), name, price }, qty);
+    manualNameInput.value = '';
+    manualPriceInput.value = '';
+    manualQtyInput.value = '';
+  });
+
+  // Delete cart item
+  cartItems.addEventListener('click', e => {
+    if (e.target.tagName === 'BUTTON') {
+      const index = parseInt(e.target.dataset.index);
+      cart.splice(index, 1);
+      renderCart();
+    }
+  });
+
+  // Discount change
+  discountInput.addEventListener('input', calculateTotal);
+
+  // Send WhatsApp message
+  sendWhatsappBtn.addEventListener('click', () => {
+    if (!customerPhoneInput.value.trim()) {
+      alert('Please enter customer phone number.');
+      return;
+    }
+    if (cart.length === 0) {
+      alert('Cart is empty.');
+      return;
+    }
+    const discount = parseFloat(discountInput.value) || 0;
+    const total = parseFloat(totalAmountSpan.textContent);
+    let message = `*WR Smile & Supplies*\nInvoice: ${invoiceNumber}\nCustomer: ${customerNameInput.value}\nPhone: ${customerPhoneInput.value}\n\nItems:\n`;
+    cart.forEach(item => {
+      message += `${item.name} x${item.qty} = Rs. ${(item.price * item.qty).toFixed(2)}\n`;
+    });
+    message += `\nDiscount: Rs. ${discount.toFixed(2)}\nTotal: Rs. ${total.toFixed(2)}\n\nThank you for your business!`;
+
+    const url = `https://wa.me/${customerPhoneInput.value}?text=${encodeURIComponent(message)}`;
+    window.open(url, '_blank');
+
+    // Save bill to Firebase
+    saveBill();
+  });
+
+  // Save bill function
+  function saveBill() {
+    if (!customerNameInput.value.trim() || !customerPhoneInput.value.trim() || cart.length === 0) return;
+    const billData = {
+      invoice: invoiceNumber,
+      customer: customerNameInput.value.trim(),
+      phone: customerPhoneInput.value.trim(),
+      discount: parseFloat(discountInput.value) || 0,
+      total: parseFloat(totalAmountSpan.textContent),
+      items: cart,
+      date: new Date().toISOString()
+    };
+    db.ref('bills/' + invoiceNumber).set(billData).then(() => {
+      // Reset for new bill
+      invoiceNumber = 'INV-' + Date.now();
+      invoiceInput.value = invoiceNumber;
+      cart = [];
+      renderCart();
+      customerNameInput.value = '';
+      customerPhoneInput.value = '';
+      discountInput.value = '0';
+      alert('Bill saved successfully!');
+    });
+  }
+
+  // Print receipt
+  printReceiptBtn.addEventListener('click', () => {
+    if (cart.length === 0) {
+      alert('Cart is empty!');
+      return;
+    }
+    document.querySelector('.print-area').classList.remove('d-none');
+    document.getElementById('print-invoice').textContent = invoiceNumber;
+    document.getElementById('print-customer-name').textContent = customerNameInput.value;
+    document.getElementById('print-customer-phone').textContent = customerPhoneInput.value;
+    document.getElementById('print-discount').textContent = discountInput.value;
+    document.getElementById('print-total').textContent = totalAmountSpan.textContent;
+    document.getElementById('print-date').textContent = new Date().toLocaleString();
+
+    const printItems = document.getElementById('print-items');
+    printItems.innerHTML = '';
+    cart.forEach(item => {
+      const div = document.createElement('div');
+      div.textContent = `${item.name} x${item.qty} = Rs. ${(item.price * item.qty).toFixed(2)}`;
+      printItems.appendChild(div);
+    });
+
+    window.print();
+
+    document.querySelector('.print-area').classList.add('d-none');
+  });
+
+  // Export PDF
+  exportPdfBtn.addEventListener('click', () => {
+    if (cart.length === 0) {
+      alert('Cart is empty!');
+      return;
+    }
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    doc.setFontSize(14);
+    doc.text("WR Smile & Supplies", 10, 10);
+    doc.setFontSize(11);
+    doc.text("Invoice: " + invoiceNumber, 10, 20);
+    doc.text("Customer: " + customerNameInput.value, 10, 30);
+    doc.text("Phone: " + customerPhoneInput.value, 10, 40);
+    let y = 50;
+    cart.forEach(item => {
+      doc.text(`${item.name} x${item.qty} = Rs. ${(item.price * item.qty).toFixed(2)}`, 10, y);
+      y += 10;
+    });
+    doc.text("Discount: Rs. " + discountInput.value, 10, y);
+    y += 10;
+    doc.text("Total: Rs. " + totalAmountSpan.textContent, 10, y);
+    doc.save(`${invoiceNumber}.pdf`);
+  });
+</script>
 
 </body>
 </html>

@@ -1,0 +1,29 @@
+body {
+  font-family: 'Segoe UI', sans-serif;
+}
+.receipt-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 0;
+}
+.card-text.display-6 {
+  font-size: 2rem;
+}
+.spinner-border {
+  width: 5rem;
+  height: 5rem;
+  border-width: 0.3em;
+}
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #receipt-content, #receipt-content * {
+    visibility: visible;
+  }
+  #receipt-content {
+    position: absolute;
+    left: 0;
+    top: 0;
+  }
+}
