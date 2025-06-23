@@ -4,13 +4,12 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>WR Smile and Supplies</title>
+  <!-- Bootstrap CSS -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"  rel="stylesheet"/>
+  <!-- Font Awesome Icons -->
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"  rel="stylesheet"/>
-  <style>
-    body { font-family: 'Segoe UI', sans-serif; }
-    .card-text.display-6 { font-size: 2rem; }
-    #cart { background-color: #f9f9f9; }
-  </style>
+  <!-- Custom Styles -->
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
@@ -73,7 +72,7 @@
           </tr>
         </thead>
         <tbody id="stock-table-body">
-          <!-- Products will appear here -->
+          <!-- Products loaded here -->
         </tbody>
       </table>
     </section>
@@ -164,126 +163,141 @@
 <!-- Bootstrap JS -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script> 
 
-<!-- Script Logic -->
-<script>
-  let cartTotal = 0;
-  const stockTableBody = document.getElementById("stock-table-body");
-  const stockCountDisplay = document.getElementById("stock-count");
-  const cartItems = document.getElementById("cart-items");
-  const totalAmount = document.getElementById("total-amount");
-  const receiptItems = document.getElementById("receipt-items");
-  const receiptTotal = document.getElementById("receipt-total");
-  const receiptDate = document.getElementById("receipt-date");
+<!-- Firebase App + Firestore -->
+<script type="module">
+  // Import Firebase modules
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js"; 
+  import { getDatabase, ref, onValue, push, remove, update } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-database.js"; 
 
-  let products = [];
-
-  // Load from localStorage
-  window.onload = () => {
-    const saved = localStorage.getItem("products");
-    if (saved) {
-      products = JSON.parse(saved);
-      renderProducts();
-    }
+  // Your Firebase config
+  const firebaseConfig = {
+    apiKey: "AIzaSyACehOi7n-dbdN00D4tJr2kD_-AVR6S-Vo",
+    authDomain: "wr-smile-shop.firebaseapp.com",
+    projectId: "wr-smile-shop",
+    storageBucket: "wr-smile-shop.firebasestorage.app",
+    messagingSenderId: "299864260187",
+    appId: "1:299864260187:web:fa6af65ef95674aff1097e",
+    measurementId: "G-3Z38G6MCYJ"
   };
 
-  function updateStockCount() {
-    stockCountDisplay.textContent = stockTableBody.children.length;
-  }
+  // Initialize Firebase
+  const app = initializeApp(firebaseConfig);
+  const db = getDatabase(app);
 
-  function addProduct(e) {
+  // Reference to products
+  const productsRef = ref(db, 'products');
+
+  let cartTotal = 0;
+
+  // Load products from Firebase Realtime DB
+  onValue(productsRef, (snapshot) => {
+    const products = [];
+    snapshot.forEach((childSnapshot) => {
+      products.push({ id: childSnapshot.key, ...childSnapshot.val() });
+    });
+
+    renderProducts(products);
+  });
+
+  // Add product
+  window.addProduct = function(e) {
     e.preventDefault();
-    const name = document.getElementById("productName").value;
+    const name = document.getElementById("productName").value.trim();
     const price = parseFloat(document.getElementById("productPrice").value);
     const stock = parseInt(document.getElementById("productStock").value);
 
-    const product = { id: Date.now(), name, price, stock };
-    products.push(product);
-    localStorage.setItem("products", JSON.stringify(products));
-    renderProducts();
+    if (!name || isNaN(price) || isNaN(stock)) {
+      alert("Please fill all fields correctly.");
+      return;
+    }
 
-    bootstrap.Modal.getInstance(document.getElementById("addProductModal")).hide();
-  }
+    const newProduct = { name, price, stock };
+    push(productsRef, newProduct).then(() => {
+      document.getElementById("productName").value = "";
+      document.getElementById("productPrice").value = "";
+      document.getElementById("productStock").value = "";
+      bootstrap.Modal.getInstance(document.getElementById("addProductModal")).hide();
+    });
+  };
 
-  function renderProducts() {
-    stockTableBody.innerHTML = "";
-    products.forEach((p, index) => {
+  // Delete product
+  window.deleteProduct = function(id) {
+    if (!confirm("Are you sure you want to delete this product?")) return;
+    remove(ref(db, 'products/' + id));
+  };
+
+  // Sell product (update stock)
+  window.sellProduct = function(productId, cell) {
+    const quantity = 1;
+    const productRef = ref(db, 'products/' + productId);
+
+    onValue(productRef, (snapshot) => {
+      const product = snapshot.val();
+      if (!product) return;
+
+      if (product.stock >= quantity) {
+        const newStock = product.stock - quantity;
+        update(productRef, { stock: newStock });
+
+        // Add to bill
+        const li = document.createElement("li");
+        li.textContent = `${product.name} x${quantity} - Rs. ${product.price * quantity}`;
+        document.getElementById("cart-items").appendChild(li);
+
+        cartTotal += product.price * quantity;
+        document.getElementById("total-amount").textContent = cartTotal.toFixed(2);
+      } else {
+        alert(`Only ${product.stock} in stock for ${product.name}`);
+      }
+    }, { onlyOnce: true });
+  };
+
+  // Generate receipt
+  window.generateReceipt = function () {
+    const cartList = document.getElementById("cart-items");
+    const receiptItems = document.getElementById("receipt-items");
+    receiptItems.innerHTML = "";
+
+    for (let i = 0; i < cartList.children.length; i++) {
+      const item = cartList.children[i];
+      const div = document.createElement("div");
+      div.className = "receipt-item";
+      div.innerHTML = item.outerHTML || item.textContent;
+      receiptItems.appendChild(div);
+    }
+
+    document.getElementById("receipt-total").textContent = 'Rs. ' + cartTotal.toFixed(2);
+    document.getElementById("receipt-date").textContent = new Date().toLocaleString();
+
+    cartTotal = 0;
+    cartList.innerHTML = "";
+    document.getElementById("total-amount").textContent = "0";
+
+    new bootstrap.Modal(document.getElementById("receiptModal")).show();
+  };
+
+  // Render products in table
+  function renderProducts(products) {
+    const tbody = document.getElementById("stock-table-body");
+    tbody.innerHTML = "";
+
+    products.forEach((p) => {
       const row = document.createElement("tr");
       row.innerHTML = `
-        <td>${index + 1}</td>
-        <td>${p.name}</td>
+        <td>${p.id}</td>
+        <td><a href="#" onclick="sellProduct('${p.id}', this)">${p.name}</a></td>
         <td>Rs. ${p.price.toFixed(2)}</td>
         <td>${p.stock}</td>
         <td>
-          <button class="btn btn-sm btn-warning me-1">Edit</button>
-          <button class="btn btn-sm btn-danger" onclick="deleteProduct(${p.id})">Delete</button>
+          <button class="btn btn-sm btn-danger" onclick="deleteProduct('${p.id}')">Delete</button>
         </td>
       `;
-      stockTableBody.appendChild(row);
+      tbody.appendChild(row);
     });
-    updateStockCount();
+
+    document.getElementById("stock-count").textContent = products.length;
   }
-
-  function deleteProduct(id) {
-    products = products.filter(p => p.id !== id);
-    localStorage.setItem("products", JSON.stringify(products));
-    renderProducts();
-  }
-
-  document.getElementById("product-search").addEventListener("keypress", function(e) {
-    if (e.key === "Enter") {
-      const productName = this.value.trim();
-      if (!productName) return;
-
-      const li = document.createElement("li");
-      const itemPrice = (Math.random() * 100 + 50).toFixed(2); // dummy price
-      li.textContent = `${productName} - Rs. ${itemPrice}`;
-      cartItems.appendChild(li);
-
-      cartTotal += parseFloat(itemPrice);
-      totalAmount.textContent = cartTotal.toFixed(2);
-
-      this.value = "";
-    }
-  });
-
-  function generateReceipt() {
-    receiptItems.innerHTML = cartItems.innerHTML;
-    receiptTotal.textContent = 'Rs. ' + cartTotal.toFixed(2);
-    receiptDate.textContent = new Date().toLocaleString();
-    new bootstrap.Modal(document.getElementById("receiptModal")).show();
-  }
-  
 </script>
-<!-- Firebase App (the core Firebase SDK) -->
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script> 
-<!-- Firebase Realtime Database -->
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script> 
-<script>
-  // Your Firebase config
-  // Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
-import { getAnalytics } from "firebase/analytics";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
 
-// Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
-const firebaseConfig = {
-  apiKey: "AIzaSyACehOi7n-dbdN00D4tJr2kD_-AVR6S-Vo",
-  authDomain: "wr-smile-shop.firebaseapp.com",
-  projectId: "wr-smile-shop",
-  storageBucket: "wr-smile-shop.firebasestorage.app",
-  messagingSenderId: "299864260187",
-  appId: "1:299864260187:web:fa6af65ef95674aff1097e",
-  measurementId: "G-3Z38G6MCYJ"
-};
-
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
-
-  // Reference to Firebase Realtime Database
-  const db = firebase.database();
-</script>
 </body>
 </html>

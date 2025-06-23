@@ -1,54 +1,39 @@
-// Firebase reference (must be defined globally)
-let db = null;
-let useFirebase = false;
+// Import Firebase modules
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js'; 
+import { getDatabase, ref, onValue, push, remove, update } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-database.js'; 
 
-// Initialize Firebase or fallback to localStorage
-function initDatabase() {
-  if (typeof firebase !== "undefined" && firebase?.app) {
-    db = firebase.database();
-    useFirebase = true;
-    loadProductsFromFirebase();
-  } else {
-    loadProductsFromLocalStorage();
-  }
-}
+// Your Firebase config
+const firebaseConfig = {
+  apiKey: "AIzaSyACehOi7n-dbdN00D4tJr2kD_-AVR6S-Vo",
+  authDomain: "wr-smile-shop.firebaseapp.com",
+  projectId: "wr-smile-shop",
+  storageBucket: "wr-smile-shop.firebasestorage.app",
+  messagingSenderId: "299864260187",
+  appId: "1:299864260187:web:fa6af65ef95674aff1097e",
+  measurementId: "G-3Z38G6MCYJ"
+};
 
-// Load from Firebase
-function loadProductsFromFirebase() {
-  db.ref('products').on('value', (snapshot) => {
-    stockTableBody.innerHTML = "";
-    snapshot.forEach((childSnapshot) => {
-      const key = childSnapshot.key;
-      const product = childSnapshot.val();
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
 
-      const row = document.createElement("tr");
-      row.innerHTML = `
-        <td>${key}</td>
-        <td>${product.name}</td>
-        <td>Rs. ${product.price.toFixed(2)}</td>
-        <td>${product.stock}</td>
-        <td>
-          <button class="btn btn-sm btn-warning me-1">Edit</button>
-          <button class="btn btn-sm btn-danger" onclick="deleteProduct('${key}')">Delete</button>
-        </td>
-      `;
-      stockTableBody.appendChild(row);
-    });
-    updateStockCount();
+// Reference to products
+const productsRef = ref(db, 'products');
+
+let cartTotal = 0;
+
+// Load products from Firebase Realtime DB
+onValue(productsRef, (snapshot) => {
+  const products = [];
+  snapshot.forEach((childSnapshot) => {
+    products.push({ id: childSnapshot.key, ...childSnapshot.val() });
   });
-}
 
-// Load from localStorage
-function loadProductsFromLocalStorage() {
-  const saved = localStorage.getItem("products");
-  if (saved) {
-    products = JSON.parse(saved);
-    renderProducts();
-  }
-}
+  renderProducts(products);
+});
 
-// Add Product
-function addProduct(e) {
+// Add product
+window.addProduct = function(e) {
   e.preventDefault();
   const name = document.getElementById("productName").value.trim();
   const price = parseFloat(document.getElementById("productPrice").value);
@@ -59,130 +44,89 @@ function addProduct(e) {
     return;
   }
 
-  const product = { id: Date.now(), name, price, stock };
-
-  if (useFirebase) {
-    db.ref('products').push(product)
-      .then(() => {
-        alert("Product added successfully!");
-        document.getElementById("productName").value = "";
-        document.getElementById("productPrice").value = "";
-        document.getElementById("productStock").value = "";
-        loadProductsFromFirebase();
-      })
-      .catch((error) => {
-        alert("Error adding product: " + error.message);
-      });
-  } else {
-    products.push(product);
-    localStorage.setItem("products", JSON.stringify(products));
-    renderProducts();
-  }
-
-  bootstrap.Modal.getInstance(document.getElementById("addProductModal")).hide();
-}
-
-// Render Products (localStorage version)
-let products = [];
-function renderProducts() {
-  stockTableBody.innerHTML = "";
-  products.forEach((p, index) => {
-    const row = document.createElement("tr");
-    row.innerHTML = `
-      <td>${index + 1}</td>
-      <td>${p.name}</td>
-      <td>Rs. ${p.price.toFixed(2)}</td>
-      <td>${p.stock}</td>
-      <td>
-        <button class="btn btn-sm btn-warning me-1">Edit</button>
-        <button class="btn btn-sm btn-danger" onclick="deleteProduct(${p.id})">Delete</button>
-      </td>
-    `;
-    stockTableBody.appendChild(row);
+  const newProduct = { name, price, stock };
+  push(productsRef, newProduct).then(() => {
+    document.getElementById("productName").value = "";
+    document.getElementById("productPrice").value = "";
+    document.getElementById("productStock").value = "";
+    bootstrap.Modal.getInstance(document.getElementById("addProductModal")).hide();
   });
-  updateStockCount();
-}
+};
 
-// Delete Product
-function deleteProduct(id) {
+// Delete product
+window.deleteProduct = function(id) {
   if (!confirm("Are you sure you want to delete this product?")) return;
+  remove(ref(db, 'products/' + id));
+};
 
-  if (useFirebase) {
-    db.ref('products').child(id).remove()
-      .then(() => {
-        alert("Product deleted");
-        loadProductsFromFirebase();
-      })
-      .catch((error) => {
-        alert("Error deleting product: " + error.message);
-      });
-  } else {
-    products = products.filter(p => p.id !== id);
-    localStorage.setItem("products", JSON.stringify(products));
-    renderProducts();
-  }
-}
+// Sell product (update stock + add to bill)
+window.sellProduct = function(productId, cell) {
+  const quantity = 1;
+  const productRef = ref(db, 'products/' + productId);
 
-// Cart logic
-let cartTotal = 0;
-const stockTableBody = document.getElementById("stock-table-body");
-const stockCountDisplay = document.getElementById("stock-count");
-const cartItems = document.getElementById("cart-items");
-const totalAmount = document.getElementById("total-amount");
-const receiptItems = document.getElementById("receipt-items");
-const receiptTotal = document.getElementById("receipt-total");
-const receiptDate = document.getElementById("receipt-date");
+  onValue(productRef, (snapshot) => {
+    const product = snapshot.val();
+    if (!product) return;
 
-document.getElementById("product-search").addEventListener("keypress", function(e) {
-  if (e.key === "Enter") {
-    const productName = this.value.trim();
-    if (!productName) return;
+    if (product.stock >= quantity) {
+      const newStock = product.stock - quantity;
+      update(productRef, { stock: newStock });
 
-    const li = document.createElement("li");
-    const itemPrice = (Math.random() * 100 + 50).toFixed(2); // dummy price
-    li.textContent = `${productName} - Rs. ${itemPrice}`;
-    cartItems.appendChild(li);
+      // Add to cart
+      const li = document.createElement("li");
+      li.textContent = `${product.name} x${quantity} - Rs. ${product.price * quantity}`;
+      document.getElementById("cart-items").appendChild(li);
 
-    cartTotal += parseFloat(itemPrice);
-    totalAmount.textContent = cartTotal.toFixed(2);
+      cartTotal += product.price * quantity;
+      document.getElementById("total-amount").textContent = cartTotal.toFixed(2);
+    } else {
+      alert(`Only ${product.stock} in stock for ${product.name}`);
+    }
+  }, { onlyOnce: true });
+};
 
-    this.value = "";
-  }
-});
-
-// Generate Receipt
-function generateReceipt() {
-  if (cartItems.children.length === 0) {
-    alert("Your cart is empty!");
-    return;
-  }
-
+// Generate receipt
+window.generateReceipt = function () {
+  const cartList = document.getElementById("cart-items");
+  const receiptItems = document.getElementById("receipt-items");
   receiptItems.innerHTML = "";
-  for (let i = 0; i < cartItems.children.length; i++) {
-    const item = cartItems.children[i];
+
+  for (let i = 0; i < cartList.children.length; i++) {
+    const item = cartList.children[i];
     const div = document.createElement("div");
     div.className = "receipt-item";
-    const [name, price] = item.textContent.split(" - ");
-    div.innerHTML = `<span>${name}</span><span>${price}</span>`;
+    div.innerHTML = item.outerHTML || item.textContent;
     receiptItems.appendChild(div);
   }
 
-  receiptTotal.textContent = 'Rs. ' + cartTotal.toFixed(2);
-  receiptDate.textContent = new Date().toLocaleString();
+  document.getElementById("receipt-total").textContent = 'Rs. ' + cartTotal.toFixed(2);
+  document.getElementById("receipt-date").textContent = new Date().toLocaleString();
 
   cartTotal = 0;
-  cartItems.innerHTML = "";
-  totalAmount.textContent = "0";
+  cartList.innerHTML = "";
+  document.getElementById("total-amount").textContent = "0";
 
   new bootstrap.Modal(document.getElementById("receiptModal")).show();
-}
-
-// Update stock count
-function updateStockCount() {
-  stockCountDisplay.textContent = stockTableBody.children.length;
-}
-
-// Init on page load
-window.onload = () => {
-  initDatabase();
 };
+
+// Render products in table
+function renderProducts(products) {
+  const tbody = document.getElementById("stock-table-body");
+  tbody.innerHTML = "";
+
+  products.forEach((p) => {
+    const row = document.createElement("tr");
+    row.innerHTML = `
+      <td>${p.id}</td>
+      <td><a href="#" onclick="sellProduct('${p.id}', this)">${p.name}</a></td>
+      <td>Rs. ${p.price.toFixed(2)}</td>
+      <td>${p.stock}</td>
+      <td>
+        <button class="btn btn-sm btn-danger" onclick="deleteProduct('${p.id}')">Delete</button>
+      </td>
+    `;
+    tbody.appendChild(row);
+  });
+
+  document.getElementById("stock-count").textContent = products.length;
+}
