@@ -1,62 +1,57 @@
-// Firebase imports
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js'; 
-import {
-  getDatabase, ref, onValue, push, update, remove
-} from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-database.js'; 
-import { getAuth, signOut } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js'; 
+// Firebase v8 SDK
+if (typeof firebase === "undefined") {
+  const firebaseScript = document.createElement("script");
+  firebaseScript.src = "https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"; 
+  document.head.appendChild(firebaseScript);
 
+  const databaseScript = document.createElement("script");
+  databaseScript.src = "https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"; 
+  document.head.appendChild(databaseScript);
+}
+
+// Firebase config
 const firebaseConfig = {
-  apiKey: "AIzaSyACehOi7n-dbdN00D4tJr2kD_-AVR6S-Vo",
+  apiKey: "YOUR_API_KEY",
   authDomain: "wr-smile-shop.firebaseapp.com",
   projectId: "wr-smile-shop",
   storageBucket: "wr-smile-shop.appspot.com",
   messagingSenderId: "299864260187",
-  appId: "1:299864260187:web:fa6af65ef95674aff1097e",
-  databaseURL: "https://wr-smile-shop-default-rtdb.firebaseio.com/" 
+  appId: "1:299864260187:web:fa6af65ef95674aff1097e"
 };
 
-const app = initializeApp(firebaseConfig);
-const db = getDatabase(app);
-const auth = getAuth(app);
+// Initialize Firebase
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
 
 let cartTotal = 0;
 let currentBillNumber = 1;
 
-const productsRef = ref(db, 'products');
-const receiptsRef = ref(db, 'receipts');
-
-document.addEventListener("DOMContentLoaded", () => {
-  document.getElementById("page-loader")?.remove();
-
-  // Load last bill number
-  onValue(receiptsRef, snap => {
-    const receipts = [];
-    snap.forEach(child => receipts.push(child.val()));
-    if (receipts.length > 0) currentBillNumber = receipts.length + 1;
-  }, { onlyOnce: true });
-
-  // Theme toggle
-  document.getElementById("themeToggle")?.addEventListener("click", () => {
-    document.body.classList.toggle("bg-dark");
-    document.body.classList.toggle("text-white");
-    document.querySelectorAll(".card").forEach(c => c.classList.toggle("bg-dark"));
-    document.querySelectorAll(".card").forEach(c => c.classList.toggle("text-white"));
-  });
+// Theme Toggle
+document.getElementById("themeToggle")?.addEventListener("click", () => {
+  document.body.classList.toggle("bg-dark");
+  document.body.classList.toggle("text-white");
 });
 
+// Load last bill number
+db.ref('receipts').on("value", snapshot => {
+  const receipts = [];
+  snapshot.forEach(child => receipts.push(child.val()));
+  if (receipts.length > 0) currentBillNumber = receipts.length + 1;
+}, err => console.error(err));
+
 // Load products
-export function loadProducts(callback) {
-  onValue(productsRef, (snapshot) => {
+function loadProducts(callback) {
+  db.ref('products').on("value", snapshot => {
     const products = [];
-    snapshot.forEach(childSnapshot => {
-      products.push({ id: childSnapshot.key, ...childSnapshot.val() });
+    snapshot.forEach(child => {
+      products.push({ id: child.key, ...child.val() });
     });
     callback(products);
-  });
+  }, err => console.error(err));
 }
 
 // Add product
-export function addProduct(e) {
+function addProduct(e) {
   e.preventDefault();
   const name = document.getElementById("productName").value.trim();
   const price = parseFloat(document.getElementById("productPrice").value);
@@ -67,8 +62,7 @@ export function addProduct(e) {
     return;
   }
 
-  const newProduct = { name, price, stock };
-  push(productsRef, newProduct).then(() => {
+  db.ref('products').push({ name, price, stock }).then(() => {
     document.getElementById("productName").value = "";
     document.getElementById("productPrice").value = "";
     document.getElementById("productStock").value = "";
@@ -77,40 +71,39 @@ export function addProduct(e) {
 }
 
 // Delete product
-export function deleteProduct(id) {
-  if (!confirm("Are you sure?")) return;
-  remove(ref(db, 'products/' + id));
+function deleteProduct(id) {
+  if (confirm("Are you sure?")) {
+    db.ref('products').child(id).remove();
+  }
 }
 
 // Sell product
-export function sellProduct(productId) {
-  const productRef = ref(db, 'products/' + productId);
+function sellProduct(productId) {
   const cartItems = document.getElementById("cart-items");
   const totalAmount = document.getElementById("total-amount");
 
-  onValue(productRef, (snapshot) => {
+  db.ref('products').child(productId).once("value", snapshot => {
     const product = snapshot.val();
-    if (!product) return;
-
     const quantity = 1;
+
     if (product.stock >= quantity) {
       const newStock = product.stock - quantity;
-      update(productRef, { stock: newStock });
+      db.ref('products').child(productId).update({ stock: newStock });
 
       const li = document.createElement("li");
-      li.textContent = `${product.name} x${quantity} - Rs. ${product.price * quantity}`;
+      li.textContent = `${product.name} x${quantity} - Rs. ${product.price}`;
       cartItems.appendChild(li);
 
-      cartTotal += product.price * quantity;
+      cartTotal += product.price;
       totalAmount.textContent = cartTotal.toFixed(2);
     } else {
       alert(`Only ${product.stock} in stock for ${product.name}`);
     }
-  }, { onlyOnce: true });
+  });
 }
 
 // Generate receipt
-export async function generateReceipt() {
+function generateReceipt() {
   const cartList = document.getElementById("cart-items");
   const receiptItems = document.getElementById("receipt-items");
   const receiptDate = document.getElementById("receipt-date");
@@ -120,93 +113,92 @@ export async function generateReceipt() {
   let grandTotal = 0;
 
   for (let i = 0; i < cartList.children.length; i++) {
-    const itemText = cartList.children[i].textContent;
+    const item = cartList.children[i];
     const div = document.createElement("div");
     div.className = "receipt-item";
-    const [name, price] = itemText.split(" - ");
-    div.innerHTML = `<span>${name}</span><span>${price}</span>`;
+    div.innerHTML = item.outerHTML || item.textContent;
     receiptItems.appendChild(div);
 
-    const match = price.match(/Rs\. ([\d\.]+)/);
+    const match = item.textContent.match(/Rs\. ([\d\.]+)/);
     if (match) grandTotal += parseFloat(match[1]);
   }
 
-  receiptDate.textContent = new Date().toLocaleString();
+  const date = new Date().toLocaleString();
+  receiptDate.textContent = date;
   receiptTotal.textContent = 'Rs. ' + grandTotal.toFixed(2);
-  new bootstrap.Modal(document.getElementById("receiptModal")).show();
 
   // Save receipt
   const receiptData = {
     billNo: `INV-${String(currentBillNumber).padStart(3, '0')}`,
     items: Array.from(cartList.children).map(li => li.textContent),
     total: grandTotal,
-    date: new Date().toISOString()
+    date: date
   };
 
-  push(receiptsRef, receiptData).then(() => {
-    currentBillNumber++;
+  db.ref('receipts').push(receiptData).then(() => {
+    alert("Receipt saved!");
+    cartTotal = 0;
     cartList.innerHTML = "";
     totalAmount.textContent = "0";
+    currentBillNumber++;
   });
 }
 
-// Export monthly sales to Excel
-export function exportMonthlyReport() {
-  const { utils, writeFile } = XLSX;
-  onValue(receiptsRef, snap => {
+// Export monthly report
+function exportMonthlyReport() {
+  const ws_data = [];
+
+  db.ref('receipts').once("value", snap => {
     const receipts = [];
     snap.forEach(child => receipts.push(child.val()));
 
-    const ws = utils.json_to_sheet(receipts.map(r => ({
-      "Bill No": r.billNo,
-      "Date": new Date(r.date).toLocaleString(),
-      "Total": r.total.toFixed(2)
-    })));
-    const wb = utils.book_new();
-    utils.book_append_sheet(wb, ws, "Monthly Sales");
-    writeFile(wb, "monthly_sales_report.xlsx");
-  }, { onlyOnce: true });
-}
-
-// Render products
-export function renderProducts(products) {
-  const tbody = document.getElementById("stock-table-body");
-  tbody.innerHTML = "";
-
-  products.forEach((p) => {
-    const row = document.createElement("tr");
-    row.innerHTML = `
-      <td>${p.id}</td>
-      <td><a href="#" onclick="sellProduct('${p.id}')">${p.name}</a></td>
-      <td>Rs. ${p.price.toFixed(2)}</td>
-      <td>${p.stock}</td>
-      <td>
-        <button class="btn btn-sm btn-danger" onclick="deleteProduct('${p.id}')">Delete</button>
-      </td>
-    `;
-    tbody.appendChild(row);
-  });
-
-  document.getElementById("report-total-products").textContent = products.length;
-}
-
-if (document.getElementById("stock-table-body")) {
-  loadProducts(renderProducts);
-}
-
-if (document.getElementById("monthly-report-table")) {
-  loadMonthlyReport();
-}
-
-function loadMonthlyReport() {
-  const tbody = document.getElementById("monthly-report-table").querySelector("tbody");
-  const salesByMonth = {};
-
-  onValue(receiptsRef, snap => {
-    const receipts = [];
-    snap.forEach(child => receipts.push(child.val()));
+    const salesByMonth = {};
 
     receipts.forEach(r => {
+      const date = new Date(r.date);
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      if (!salesByMonth[monthKey]) salesByMonth[monthKey] = 0;
+      salesByMonth[monthKey] += r.total;
+    });
+
+    const ws = XLSX.utils.aoa_to_sheet([["Month", "Total"]].concat(
+      Object.entries(salesByMonth).map(([m, t]) => [m, t])
+    ));
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Monthly Sales");
+    XLSX.writeFile(wb, "monthly_sales_report.xlsx");
+  });
+}
+
+// Load products
+if (document.getElementById("stock-table-body")) {
+  loadProducts(products => {
+    document.getElementById("stock-table-body").innerHTML = "";
+    products.forEach(p => {
+      const row = document.createElement("tr");
+      row.innerHTML = `
+        <td>${p.id}</td>
+        <td><a href="#" onclick="sellProduct('${p.id}')">${p.name}</a></td>
+        <td>Rs. ${p.price.toFixed(2)}</td>
+        <td>${p.stock}</td>
+        <td>
+          <button class="btn btn-sm btn-danger" onclick="deleteProduct('${p.id}')">Delete</button>
+        </td>
+      `;
+      document.getElementById("stock-table-body").appendChild(row);
+    });
+  });
+}
+
+// Load monthly report
+if (document.getElementById("monthly-report-table")) {
+  db.ref('receipts').on("value", snap => {
+    const tbody = document.getElementById("monthly-report-table").querySelector("tbody");
+    const salesByMonth = {};
+
+    snap.forEach(child => {
+      const r = child.val();
       const date = new Date(r.date);
       const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
       if (!salesByMonth[monthKey]) salesByMonth[monthKey] = 0;
@@ -222,46 +214,46 @@ function loadMonthlyReport() {
   });
 }
 
-// WhatsApp messages
-const instanceId = "YOUR_INSTANCE_ID";
-const instanceToken = "YOUR_INSTANCE_TOKEN";
+// WhatsApp send receipt
+function sendReceiptViaWhatsApp() {
+  const cartList = document.getElementById("cart-items");
+  let msg = "*WR Smile and Supplies*\n\n";
+  msg += "411/7, Kandy Road, Mollipothana\n";
+  msg += "Tel: 076-495-0844\n\n";
+  msg += "🧾 Bill Summary:\n";
 
-async function fetchWhatsAppMessages() {
-  const response = await fetch(`https://api.greenapi.com/waInstance${instanceId}/receiveNotification/${instanceToken}`,  {
-    method: "GET"
-  });
+  let grandTotal = 0;
 
-  const data = await response.json();
+  for (let i = 0; i < cartList.children.length; i++) {
+    const itemText = cartList.children[i].textContent;
+    msg += `- ${itemText}\n`;
 
-  if (data && data.senderName && data.textMessage) {
-    const msgData = {
-      from: data.senderName,
-      number: data.senderData.phoneNumber,
-      text: data.textMessage,
-      timestamp: new Date().toLocaleString()
-    };
-
-    push(ref(db, 'whatsapp_messages'), msgData);
+    const match = itemText.match(/Rs\. ([\d\.]+)/);
+    if (match) grandTotal += parseFloat(match[1]);
   }
 
-  setTimeout(fetchWhatsAppMessages, 5000);
+  msg += `\n💰 Total: Rs. ${grandTotal.toFixed(2)}\n`;
+  msg += "Thank you for shopping with us!";
+
+  window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
 }
 
+// Show WhatsApp messages
 if (document.getElementById("whatsapp-messages")) {
   const inbox = document.getElementById("whatsapp-messages");
-  onValue(ref(db, 'whatsapp_messages'), snap => {
+  db.ref('whatsapp_messages').on("value", snap => {
     inbox.innerHTML = "";
-    const messages = [];
-    snap.forEach(child => messages.push(child.val()));
-    messages.reverse().forEach(msg => {
+    snap.forEach(child => {
+      const msg = child.val();
       const div = document.createElement("div");
       div.className = "list-group-item mb-2 p-2";
-      div.innerHTML = `
-        <strong>${msg.from}</strong><br/>
-        ${msg.text}<br/>
-        <small class="text-muted">${msg.timestamp}</small>
-      `;
+      div.innerHTML = `<strong>${msg.from}</strong><br/>${msg.text}<br/><small>${msg.timestamp}</small>`;
       inbox.appendChild(div);
     });
   });
 }
+
+// Hide loader
+window.onload = () => {
+  document.getElementById("page-loader")?.remove();
+};

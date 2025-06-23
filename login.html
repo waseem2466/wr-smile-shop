@@ -8,10 +8,7 @@
 <body>
 
 <div class="container mt-5">
-  <h3 class="mb-4 text-center">
-    <img src="assets/logo.png" alt="Logo" width="100" class="mb-3" /><br/>
-    Login to WR Smile Shop Manager
-  </h3>
+  <h3 class="text-center mb-4">Login to WR Smile Shop Manager</h3>
   <form id="loginForm">
     <div class="mb-3">
       <label>Email</label>
@@ -25,32 +22,7 @@
   </form>
 </div>
 
-<script type="module">
-  import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js'; 
-  import { getAuth, signInWithEmailAndPassword } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js'; 
-
-  const firebaseConfig = {
-    apiKey: "AIzaSyACehOi7n-dbdN00D4tJr2kD_-AVR6S-Vo",
-    authDomain: "wr-smile-shop.firebaseapp.com",
-    projectId: "wr-smile-shop",
-    storageBucket: "wr-smile-shop.appspot.com",
-    messagingSenderId: "299864260187",
-    appId: "1:299864260187:web:fa6af65ef95674aff1097e"
-  };
-
-  const app = initializeApp(firebaseConfig);
-  const auth = getAuth(app);
-
-  document.getElementById("loginForm").onsubmit = (e) => {
-    e.preventDefault();
-    const email = document.getElementById("loginEmail").value;
-    const password = document.getElementById("loginPassword").value;
-
-    signInWithEmailAndPassword(auth, email, password)
-      .then(() => window.location.href = "index.html")
-      .catch(err => alert("Login failed: " + err.message));
-  };
-</script>
+<script src="script.js"></script>
 
 </body>
 </html>
