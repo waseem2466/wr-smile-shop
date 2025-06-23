@@ -2,7 +2,6 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js'; 
 import { getDatabase, ref, onValue, push, remove, update } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-database.js'; 
 
-// Your Firebase config
 const firebaseConfig = {
   apiKey: "AIzaSyACehOi7n-dbdN00D4tJr2kD_-AVR6S-Vo",
   authDomain: "wr-smile-shop.firebaseapp.com",
@@ -10,7 +9,10 @@ const firebaseConfig = {
   storageBucket: "wr-smile-shop.firebasestorage.app",
   messagingSenderId: "299864260187",
   appId: "1:299864260187:web:fa6af65ef95674aff1097e",
-  measurementId: "G-3Z38G6MCYJ"
+  measurementId: "G-3Z38G6MCYJ",
+
+  // ✅ Use this exact URL based on your Firebase project
+  databaseURL: "https://wr-smile-shop-default-rtdb.firebaseio.com/" 
 };
 
 // Initialize Firebase
