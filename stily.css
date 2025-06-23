@@ -1,9 +1,43 @@
 body {
   font-family: 'Segoe UI', sans-serif;
+  background-color: #f8f9fa;
 }
+
 .card-text.display-6 {
   font-size: 2rem;
 }
+
 #cart {
   background-color: #f9f9f9;
+  min-height: 100px;
+  padding: 10px;
+  border-radius: 5px;
+  border: 1px solid #ddd;
 }
+
+.table th,
+.table td {
+  vertical-align: middle;
+}
+
+.receipt-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 0;
+}
+
+.modal-body h4 {
+  margin-bottom: 0;
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #receipt-content, #receipt-content * {
+    visibility: visible;
+  }
+  #receipt-content {
+    position: absolute;
+    left: 0;
+    top: 0;

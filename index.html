@@ -6,7 +6,11 @@
   <title>WR Smile and Supplies</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"  rel="stylesheet"/>
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"  rel="stylesheet"/>
-  <link rel="stylesheet" href="style.css">
+  <style>
+    body { font-family: 'Segoe UI', sans-serif; }
+    .card-text.display-6 { font-size: 2rem; }
+    #cart { background-color: #f9f9f9; }
+  </style>
 </head>
 <body>
 
@@ -19,7 +23,6 @@
       <li class="nav-item"><a href="#" class="nav-link text-white active">Dashboard</a></li>
       <li class="nav-item"><a href="#stock" class="nav-link text-white">Stock</a></li>
       <li class="nav-item"><a href="#billing" class="nav-link text-white">Billing</a></li>
-      <li class="nav-item"><a href="#reports" class="nav-link text-white">Reports</a></li>
     </ul>
   </div>
 
@@ -70,16 +73,7 @@
           </tr>
         </thead>
         <tbody id="stock-table-body">
-          <tr>
-            <td>1</td>
-            <td>Rice (5kg)</td>
-            <td>Rs. 150</td>
-            <td>20</td>
-            <td>
-              <button class="btn btn-sm btn-warning">Edit</button>
-              <button class="btn btn-sm btn-danger">Delete</button>
-            </td>
-          </tr>
+          <!-- Products will appear here -->
         </tbody>
       </table>
     </section>
@@ -167,7 +161,129 @@
   </div>
 </div>
 
+<!-- Bootstrap JS -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script> 
-<script src="script.js"></script>
+
+<!-- Script Logic -->
+<script>
+  let cartTotal = 0;
+  const stockTableBody = document.getElementById("stock-table-body");
+  const stockCountDisplay = document.getElementById("stock-count");
+  const cartItems = document.getElementById("cart-items");
+  const totalAmount = document.getElementById("total-amount");
+  const receiptItems = document.getElementById("receipt-items");
+  const receiptTotal = document.getElementById("receipt-total");
+  const receiptDate = document.getElementById("receipt-date");
+
+  let products = [];
+
+  // Load from localStorage
+  window.onload = () => {
+    const saved = localStorage.getItem("products");
+    if (saved) {
+      products = JSON.parse(saved);
+      renderProducts();
+    }
+  };
+
+  function updateStockCount() {
+    stockCountDisplay.textContent = stockTableBody.children.length;
+  }
+
+  function addProduct(e) {
+    e.preventDefault();
+    const name = document.getElementById("productName").value;
+    const price = parseFloat(document.getElementById("productPrice").value);
+    const stock = parseInt(document.getElementById("productStock").value);
+
+    const product = { id: Date.now(), name, price, stock };
+    products.push(product);
+    localStorage.setItem("products", JSON.stringify(products));
+    renderProducts();
+
+    bootstrap.Modal.getInstance(document.getElementById("addProductModal")).hide();
+  }
+
+  function renderProducts() {
+    stockTableBody.innerHTML = "";
+    products.forEach((p, index) => {
+      const row = document.createElement("tr");
+      row.innerHTML = `
+        <td>${index + 1}</td>
+        <td>${p.name}</td>
+        <td>Rs. ${p.price.toFixed(2)}</td>
+        <td>${p.stock}</td>
+        <td>
+          <button class="btn btn-sm btn-warning me-1">Edit</button>
+          <button class="btn btn-sm btn-danger" onclick="deleteProduct(${p.id})">Delete</button>
+        </td>
+      `;
+      stockTableBody.appendChild(row);
+    });
+    updateStockCount();
+  }
+
+  function deleteProduct(id) {
+    products = products.filter(p => p.id !== id);
+    localStorage.setItem("products", JSON.stringify(products));
+    renderProducts();
+  }
+
+  document.getElementById("product-search").addEventListener("keypress", function(e) {
+    if (e.key === "Enter") {
+      const productName = this.value.trim();
+      if (!productName) return;
+
+      const li = document.createElement("li");
+      const itemPrice = (Math.random() * 100 + 50).toFixed(2); // dummy price
+      li.textContent = `${productName} - Rs. ${itemPrice}`;
+      cartItems.appendChild(li);
+
+      cartTotal += parseFloat(itemPrice);
+      totalAmount.textContent = cartTotal.toFixed(2);
+
+      this.value = "";
+    }
+  });
+
+  function generateReceipt() {
+    receiptItems.innerHTML = cartItems.innerHTML;
+    receiptTotal.textContent = 'Rs. ' + cartTotal.toFixed(2);
+    receiptDate.textContent = new Date().toLocaleString();
+    new bootstrap.Modal(document.getElementById("receiptModal")).show();
+  }
+  
+</script>
+<!-- Firebase App (the core Firebase SDK) -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script> 
+<!-- Firebase Realtime Database -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script> 
+<script>
+  // Your Firebase config
+  // Import the functions you need from the SDKs you need
+import { initializeApp } from "firebase/app";
+import { getAnalytics } from "firebase/analytics";
+// TODO: Add SDKs for Firebase products that you want to use
+// https://firebase.google.com/docs/web/setup#available-libraries
+
+// Your web app's Firebase configuration
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+  apiKey: "AIzaSyACehOi7n-dbdN00D4tJr2kD_-AVR6S-Vo",
+  authDomain: "wr-smile-shop.firebaseapp.com",
+  projectId: "wr-smile-shop",
+  storageBucket: "wr-smile-shop.firebasestorage.app",
+  messagingSenderId: "299864260187",
+  appId: "1:299864260187:web:fa6af65ef95674aff1097e",
+  measurementId: "G-3Z38G6MCYJ"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const analytics = getAnalytics(app);
+
+  // Reference to Firebase Realtime Database
+  const db = firebase.database();
+</script>
 </body>
 </html>
