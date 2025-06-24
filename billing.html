@@ -2,63 +2,61 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>WR Smile - Billing with Stock</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WR Smile - Billing</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
   <style>
     body { background: #f2f4f8; font-family: 'Segoe UI', sans-serif; }
     .container { max-width: 960px; margin-top: 40px; }
-    .cart-box, .stock-box { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 30px; }
+    .cart-box { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
     .cart-item { display: flex; justify-content: space-between; align-items: center; padding: 5px 0; }
     .cart-item input { width: 50px; }
     .cart-item span { flex: 1; }
     .list-group-item { cursor: pointer; }
-    .text-success { font-weight: bold; }
   </style>
 </head>
 <body>
 <div class="container">
-  <h2 class="mb-4 text-center">🧾 WR Smile - Billing with Stock</h2>
+  <h2 class="mb-4 text-center">🧾 WR Smile - Billing</h2>
 
-  <div class="row mb-3">
-    <div class="col-md-6">
-      <label>Customer Name</label>
-      <input type="text" id="customer-name" class="form-control" placeholder="Enter name">
-    </div>
-    <div class="col-md-6">
-      <label>Customer Phone</label>
-      <input type="tel" id="customer-phone" class="form-control" placeholder="Ex: 94771234567">
-    </div>
-  </div>
-
-  <div class="row mb-3">
-    <div class="col-md-6">
-      <label>Product</label>
-      <input type="text" id="product-search" class="form-control" placeholder="Search product...">
-      <div id="search-results" class="list-group mt-1"></div>
-    </div>
-    <div class="col-md-2">
-      <label>Qty</label>
-      <input type="number" id="product-qty" class="form-control" value="1">
-    </div>
-    <div class="col-md-4">
-      <label>&nbsp;</label>
-      <button class="btn btn-primary w-100" onclick="addSelectedProduct()">Add to Cart</button>
-    </div>
+  <div class="mb-3">
+    <label>Customer Phone</label>
+    <input type="tel" id="customer-phone" class="form-control">
+    <small class="text-muted" id="pending-loan-info"></small>
   </div>
 
   <div class="mb-3">
-    <label>Discount (Rs.)</label>
+    <label>Customer Name</label>
+    <input type="text" id="customer-name" class="form-control">
+  </div>
+
+  <div class="row g-2 mb-3">
+    <div class="col-md-4"><input type="text" id="manual-name" class="form-control" placeholder="Product name"></div>
+    <div class="col-md-3"><input type="number" id="manual-price" class="form-control" placeholder="Price"></div>
+    <div class="col-md-2"><input type="number" id="manual-qty" class="form-control" placeholder="Qty" value="1"></div>
+    <div class="col-md-3"><button class="btn btn-secondary w-100" onclick="addManualProduct()">Add</button></div>
+  </div>
+
+  <div class="mb-3">
+    <label>Discount</label>
     <input type="number" id="discount" class="form-control" value="0">
   </div>
 
   <div class="mb-3">
-    <label>Loan Amount (Rs.)</label>
+    <label>Loan Amount (optional)</label>
     <input type="number" id="loan-amount" class="form-control" placeholder="0">
   </div>
   <div class="mb-3">
     <label>Loan Note</label>
-    <input type="text" id="loan-note" class="form-control" placeholder="Optional notes">
+    <input type="text" id="loan-note" class="form-control" placeholder="Installment plan, etc">
+  </div>
+
+  <div class="mb-3">
+    <label>Cash Paid</label>
+    <input type="number" id="cash-paid" class="form-control" placeholder="Enter cash paid">
   </div>
 
   <div class="cart-box">
@@ -66,22 +64,12 @@
     <div id="cart-items"></div>
     <h5 class="mt-3">Total: Rs. <span id="total-amount">0.00</span></h5>
     <div class="d-grid gap-2 d-md-block mt-3">
-      <button class="btn btn-success" onclick="finalizeBill()">💾 Save Bill</button>
-      <button class="btn btn-info" onclick="sendWhatsAppBill()">📲 Send WhatsApp</button>
+      <button class="btn btn-success" onclick="finalizeBill()">✅ Save Bill</button>
+      <button class="btn btn-primary" onclick="sendWhatsAppBill()">📲 WhatsApp Bill</button>
     </div>
-  </div>
-
-  <div class="stock-box">
-    <h5>📦 Product Stock Summary</h5>
-    <table class="table table-bordered">
-      <thead><tr><th>Name</th><th>Price</th><th>Stock</th></tr></thead>
-      <tbody id="stock-summary"></tbody>
-    </table>
   </div>
 </div>
 
-<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
-<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
 <script>
   const firebaseConfig = {
     apiKey: "AIzaSyACehOi7n-dbdN00D4tJr2kD_-AVR6S-Vo",
@@ -95,69 +83,77 @@
   const db = firebase.database();
 
   let cart = [];
-  let selectedProduct = null;
+  let invoiceNumber = 'INV-' + Date.now();
 
-  function renderCart() {
+  document.getElementById('customer-phone').addEventListener('change', async function () {
+    const phone = this.value.trim();
+    if (!phone) return;
+    const customersRef = db.ref('customers');
+    const loansRef = db.ref('loans');
+
+    let customerName = '';
+    let customerId = null;
+
+    await customersRef.orderByChild('phone').equalTo(phone).once('value', snap => {
+      if (snap.exists()) {
+        const data = Object.entries(snap.val())[0];
+        customerId = data[0];
+        customerName = data[1].name;
+        document.getElementById('customer-name').value = customerName;
+      }
+    });
+
+    if (customerId) {
+      let pending = 0;
+      await loansRef.orderByChild('customerId').equalTo(customerId).once('value', snap => {
+        snap.forEach(child => {
+          const loan = child.val();
+          pending += (loan.totalAmount || 0) - (loan.paidAmount || 0);
+        });
+      });
+      document.getElementById('pending-loan-info').textContent = pending > 0 ? `Pending Loan: Rs. ${pending.toFixed(2)}` : '';
+    }
+  });
+
+  function updateCart() {
     const container = document.getElementById('cart-items');
     container.innerHTML = '';
     let total = 0;
-    cart.forEach((item, index) => {
+    cart.forEach((item, i) => {
       const div = document.createElement('div');
       div.className = 'cart-item';
       div.innerHTML = `
         <span>${item.name}</span>
-        <input type="number" value="${item.qty}" onchange="updateQty(${index}, this.value)">
+        <input type="number" value="${item.qty}" onchange="updateQty(${i}, this.value)">
         <span>Rs. ${(item.qty * item.price).toFixed(2)}</span>
-        <button class="btn btn-sm btn-danger" onclick="removeItem(${index})">❌</button>
+        <button onclick="removeItem(${i})" class="btn btn-sm btn-danger">x</button>
       `;
       container.appendChild(div);
       total += item.qty * item.price;
     });
-    const discount = parseFloat(document.getElementById('discount').value || 0);
+    let discount = parseFloat(document.getElementById('discount').value || 0);
     document.getElementById('total-amount').textContent = (total - discount).toFixed(2);
   }
 
-  function updateQty(i, val) {
-    cart[i].qty = parseInt(val);
-    renderCart();
+  function addManualProduct() {
+    const name = document.getElementById('manual-name').value;
+    const price = parseFloat(document.getElementById('manual-price').value);
+    const qty = parseInt(document.getElementById('manual-qty').value);
+    if (!name || isNaN(price) || qty < 1) return alert('Invalid product input');
+    cart.push({ name, price, qty });
+    updateCart();
+    document.getElementById('manual-name').value = '';
+    document.getElementById('manual-price').value = '';
   }
 
-  function removeItem(i) {
-    cart.splice(i, 1);
-    renderCart();
+  function updateQty(index, qty) {
+    cart[index].qty = parseInt(qty);
+    updateCart();
   }
 
-  document.getElementById('product-search').addEventListener('input', e => {
-    const val = e.target.value.toLowerCase();
-    const resultBox = document.getElementById('search-results');
-    resultBox.innerHTML = '';
-    db.ref('products').once('value', snap => {
-      snap.forEach(child => {
-        const p = child.val();
-        if (p.name.toLowerCase().includes(val)) {
-          const el = document.createElement('a');
-          el.className = 'list-group-item list-group-item-action';
-          el.textContent = `${p.name} - Rs.${p.price}`;
-          el.onclick = () => {
-            selectedProduct = { ...p, id: child.key };
-            document.getElementById('product-search').value = p.name;
-            resultBox.innerHTML = '';
-          };
-          resultBox.appendChild(el);
-        }
-      });
-    });
-  });
-
-  function addSelectedProduct() {
-    const qty = parseInt(document.getElementById('product-qty').value);
-    if (!selectedProduct || qty < 1) return alert("Select product and qty");
-    cart.push({ name: selectedProduct.name, price: selectedProduct.price, qty });
-    db.ref(`products/${selectedProduct.id}/stock`).transaction(current => (current || 0) - qty);
-    renderCart();
-    selectedProduct = null;
-    document.getElementById('product-search').value = '';
-    document.getElementById('product-qty').value = '1';
+  function removeItem(index) {
+    cart.splice(index, 1);
+    updateCart();
   }
 
   async function finalizeBill() {
@@ -165,69 +161,61 @@
     const phone = document.getElementById('customer-phone').value.trim();
     const discount = parseFloat(document.getElementById('discount').value || 0);
     const loanAmount = parseFloat(document.getElementById('loan-amount').value || 0);
-    const loanNote = document.getElementById('loan-note').value.trim();
+    const note = document.getElementById('loan-note').value.trim();
     const total = parseFloat(document.getElementById('total-amount').textContent);
+    const cashPaid = parseFloat(document.getElementById('cash-paid').value || 0);
 
-    if (!name || !phone || cart.length === 0) return alert("Fill in all fields");
+    if (!name || !phone || cart.length === 0) return alert("Please fill customer info and cart.");
 
     const customersRef = db.ref('customers');
+    const loansRef = db.ref('loans');
+    const salesRef = db.ref('sales');
     let customerId = null;
+
     await customersRef.orderByChild('phone').equalTo(phone).once('value', snap => {
-      if (snap.exists()) customerId = Object.keys(snap.val())[0];
+      if (snap.exists()) {
+        customerId = Object.keys(snap.val())[0];
+      }
     });
+
     if (!customerId) {
-      const ref = customersRef.push();
-      await ref.set({ name, phone });
-      customerId = ref.key;
+      const newCustomerRef = customersRef.push();
+      await newCustomerRef.set({ name, phone });
+      customerId = newCustomerRef.key;
     }
 
-    const bill = {
+    const billData = {
+      invoiceNumber,
       customerId,
-      name,
-      phone,
+      loanNote: note,
+      products: cart,
       discount,
-      total,
-      loanAmount,
-      loanNote,
-      cart,
-      date: new Date().toISOString()
+      totalAmount: total,
+      paidAmount: cashPaid,
+      balance: total - cashPaid,
+      loanDate: new Date().toISOString(),
     };
-    if (loanAmount > 0) {
-      await db.ref('loans').push(bill);
-      alert("Loan saved!");
+
+    if ((loanAmount > 0) || (total > cashPaid)) {
+      await loansRef.push(billData);
+      alert("✅ Loan saved successfully!");
     } else {
-      await db.ref('sales').push(bill);
-      alert("Sale saved!");
+      await salesRef.push(billData);
+      alert("✅ Sale saved successfully!");
     }
     location.reload();
   }
 
   function sendWhatsAppBill() {
-    const name = document.getElementById('customer-name').value;
     const phone = document.getElementById('customer-phone').value;
-    const total = document.getElementById('total-amount').textContent;
-    let msg = `*WR Smile Bill*\nName: ${name}\n`;
+    let msg = `🧾 *WR Smile & Supplies*\nInvoice: ${invoiceNumber}\n`;
     cart.forEach(p => {
       msg += `- ${p.name} x${p.qty} = Rs.${(p.qty * p.price).toFixed(2)}\n`;
     });
-    msg += `Total: Rs.${total}`;
-    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`);
+    msg += `Discount: Rs.${document.getElementById('discount').value}\n`;
+    msg += `Total: Rs.${document.getElementById('total-amount').textContent}`;
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank');
   }
-
-  function loadStockSummary() {
-    db.ref('products').once('value', snap => {
-      const body = document.getElementById('stock-summary');
-      body.innerHTML = '';
-      snap.forEach(child => {
-        const p = child.val();
-        const row = document.createElement('tr');
-        row.innerHTML = `<td>${p.name}</td><td>Rs.${p.price}</td><td>${p.stock}</td>`;
-        body.appendChild(row);
-      });
-    });
-  }
-
-  loadStockSummary();
 </script>
 </body>
 </html>
